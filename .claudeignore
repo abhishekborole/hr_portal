@@ -1,0 +1,41 @@
+# Dependencies
+frontend/node_modules/
+backend/venv/
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/routers/__pycache__/
+backend/app/services/__pycache__/
+backend/app/utils/__pycache__/
+
+# Build output
+frontend/dist/
+
+# Uploads & generated files
+backend/uploads/
+output/
+tmp/
+
+# Database files
+database/*.bak
+database/*.mdf
+database/*.ldf
+
+# Environment & secrets
+.env
+.env.*
+*.env
+
+# Logs
+*.log
+*.log.*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
+
+# Python compiled
+*.pyc
+*.pyo
+*.pyd
