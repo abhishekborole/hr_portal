@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { payrollApi, employeeApi } from '@/lib/api'
+import { payrollApi, employeeApi, profileApi } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { PageHeader } from '@/components/layout/AppLayout'
 import { Card, CardContent } from '@/components/ui/card'
@@ -10,8 +10,8 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, MONTHS } from '@/lib/utils'
-import { Download, CheckCircle, Eye, X } from 'lucide-react'
-import type { PayrollRecord } from '@/types'
+import { Download, CheckCircle, Eye, Wallet, X } from 'lucide-react'
+import type { Employee, PayrollRecord } from '@/types'
 
 type TabKey = 'register' | 'generate' | 'bulk' | 'payslips'
 
@@ -188,6 +188,11 @@ export default function PayrollPage() {
     queryKey: ['payroll', { month: filterMonth, year: filterYear }],
     queryFn: () => payrollApi.list({ month: filterMonth, year: filterYear }),
   })
+  const { data: myProfile } = useQuery({
+    queryKey: ['my-profile'],
+    queryFn: profileApi.get,
+    enabled: isEmployee,
+  })
 
   const finalizeMutation = useMutation({
     mutationFn: (id: number) => payrollApi.finalize(id),
@@ -254,7 +259,7 @@ export default function PayrollPage() {
           {!isLoading && payrollList.length > 0 && (
             <div className="grid grid-cols-3 gap-4 mb-4">
               <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Employees</p><p className="text-xl font-bold mt-1">{payrollList.length}</p></CardContent></Card>
-              <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Total Gross</p><p className="text-xl font-bold mt-1">{formatCurrency(totalGross)}</p></CardContent></Card>
+              <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Total Gross Salary</p><p className="text-xl font-bold mt-1">{formatCurrency(totalGross)}</p></CardContent></Card>
               <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Total Net Payout</p><p className="text-xl font-bold mt-1 text-green-600">{formatCurrency(totalNet)}</p></CardContent></Card>
             </div>
           )}
@@ -272,9 +277,9 @@ export default function PayrollPage() {
                       <tr className="border-b border-gray-100 bg-gray-50">
                         <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Code</th>
                         <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Name</th>
-                        <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">Gross</th>
-                        <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">PF</th>
-                        <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">ESIC</th>
+                        <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">Gross Salary</th>
+                        <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">Employee PF</th>
+                        <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">Employee ESIC</th>
                         <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">PT</th>
                         <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">TDS</th>
                         <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">Net</th>
@@ -322,7 +327,15 @@ export default function PayrollPage() {
       {tab === 'bulk' && isAdmin && <BulkGenerateTab departments={departments} />}
 
       {tab === 'payslips' && (
-        <PayslipsTab payrollList={payrollList} onDownload={downloadPayslip} filterMonth={filterMonth} filterYear={filterYear} setFilterMonth={setFilterMonth} setFilterYear={setFilterYear} />
+        <PayslipsTab
+          payrollList={payrollList}
+          onDownload={downloadPayslip}
+          filterMonth={filterMonth}
+          filterYear={filterYear}
+          setFilterMonth={setFilterMonth}
+          setFilterYear={setFilterYear}
+          myProfile={isEmployee ? myProfile : undefined}
+        />
       )}
     </div>
   )
@@ -453,16 +466,19 @@ function BulkGenerateTab({ departments }: { departments: { id: number; name: str
   )
 }
 
-function PayslipsTab({ payrollList, onDownload, filterMonth, filterYear, setFilterMonth, setFilterYear }: {
+function PayslipsTab({ payrollList, onDownload, filterMonth, filterYear, setFilterMonth, setFilterYear, myProfile }: {
   payrollList: PayrollRecord[]
   onDownload: (id: number, empCode: string) => void
   filterMonth: number; filterYear: number
   setFilterMonth: (m: number) => void; setFilterYear: (y: number) => void
+  myProfile?: Employee
 }) {
   const [previewRecord, setPreviewRecord] = useState<PayrollRecord | null>(null)
 
   return (
     <div>
+      {myProfile && <CompensationCard employee={myProfile} />}
+
       {previewRecord && (
         <PayslipPreviewModal
           record={previewRecord}
@@ -517,5 +533,73 @@ function PayslipsTab({ payrollList, onDownload, filterMonth, filterYear, setFilt
         </div>
       )}
     </div>
+  )
+}
+
+function CompensationCard({ employee }: { employee: Employee }) {
+  const earnings = employee.salary_breakup?.earnings
+    ? Object.entries(employee.salary_breakup.earnings).map(([label, value]) => [label, Number(value) * 12] as const)
+    : [
+        ['Basic', (Number(employee.basic_salary) || 0) * 12],
+        ['HRA', (Number(employee.hra) || 0) * 12],
+        ['Special Allowance', (Number(employee.special_allowance) || 0) * 12],
+        ['Conveyance', (Number(employee.conveyance_allowance) || 0) * 12],
+        ['Medical', (Number(employee.medical_allowance) || 0) * 12],
+      ]
+  const benefits = employee.salary_breakup?.employer_contributions
+    ? Object.entries(employee.salary_breakup.employer_contributions).map(([label, value]) => [label, Number(value) * 12] as const)
+    : []
+  const grossSalary = employee.salary_breakup?.gross_salary
+    ? employee.salary_breakup.gross_salary * 12
+    : earnings.reduce((sum, [, value]) => sum + Number(value || 0), 0)
+
+  return (
+    <Card className="mb-5">
+      <CardContent className="p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50">
+            <Wallet className="h-3.5 w-3.5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-800">Annual Compensation</p>
+            <p className="text-xs text-gray-500">Your annual salary breakup, benefits, and total CTC.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Earnings</p>
+            {earnings.map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">{label}</span>
+                <span className="text-xs font-medium text-gray-800">{formatCurrency(Number(value) || 0)}</span>
+              </div>
+            ))}
+            <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2">
+              <span className="text-xs font-semibold text-gray-700">Gross Salary</span>
+              <span className="text-sm font-bold text-blue-700">{formatCurrency(grossSalary)}</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Benefits</p>
+            {benefits.length > 0 ? benefits.map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">{label}</span>
+                <span className="text-xs font-medium text-emerald-700">{formatCurrency(Number(value) || 0)}</span>
+              </div>
+            )) : (
+              <p className="text-xs text-gray-400">No employer-side benefits configured.</p>
+            )}
+            {employee.annual_ctc ? (
+              <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2">
+                <span className="text-xs font-semibold text-gray-700">Annual CTC</span>
+                <span className="text-sm font-bold text-emerald-700">{formatCurrency(Number(employee.annual_ctc))}</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

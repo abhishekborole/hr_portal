@@ -16,3 +16,31 @@
     min-height: 100vh;
   }
 }
+
+@layer utilities {
+  .scrollbar-sidebar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(147, 197, 253, 0.45) transparent;
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(147, 197, 253, 0.28), rgba(96, 165, 250, 0.52));
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(191, 219, 254, 0.42), rgba(96, 165, 250, 0.7));
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+}

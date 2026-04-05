@@ -97,6 +97,7 @@ def generate_payroll(
         calc = calculate_payroll_from_structure(
             structure_components=emp.salary_structure.components,
             annual_ctc=emp.annual_ctc,
+            salary_mode="ctc_driven",
             other_earnings=data.other_earnings or Decimal("0"),
             other_deductions=data.other_deductions or Decimal("0"),
             working_days=working_days,
@@ -173,6 +174,7 @@ def bulk_generate_payroll(
                 calc = calculate_payroll_from_structure(
                     structure_components=emp.salary_structure.components,
                     annual_ctc=emp.annual_ctc,
+                    salary_mode="ctc_driven",
                     working_days=26,
                     present_days=present_days,
                     state=emp.state or "Maharashtra",

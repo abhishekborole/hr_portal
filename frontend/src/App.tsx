@@ -12,6 +12,9 @@ const LoginPage = lazy(() => import('@/pages/auth/LoginPage'))
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'))
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'))
 const EmployeesPage = lazy(() => import('@/pages/employees/EmployeesPage'))
+const CompanyPage = lazy(() => import('@/pages/company/CompanyPage'))
+const HRPolicyPage = lazy(() => import('@/pages/hr-policy/HRPolicyPage'))
+const PositionsPage = lazy(() => import('@/pages/positions/HiringWorkspacePage'))
 const AttendancePage = lazy(() => import('@/pages/attendance/AttendancePage'))
 const LeavesPage = lazy(() => import('@/pages/leaves/LeavesPage'))
 const PayrollPage = lazy(() => import('@/pages/payroll/PayrollPage'))
@@ -88,6 +91,15 @@ export default function App() {
                 <Route path="dashboard" element={<DashboardPage />} />
                 <Route path="employees" element={
                   <ProtectedRoute roles={['admin', 'manager']}><EmployeesPage /></ProtectedRoute>
+                } />
+                <Route path="company" element={
+                  <ProtectedRoute roles={['admin']}><CompanyPage /></ProtectedRoute>
+                } />
+                <Route path="hr-policy" element={
+                  <ProtectedRoute roles={['admin']}><HRPolicyPage /></ProtectedRoute>
+                } />
+                <Route path="positions" element={
+                  <ProtectedRoute roles={['admin', 'manager']}><PositionsPage /></ProtectedRoute>
                 } />
                 <Route path="attendance" element={<AttendancePage />} />
                 <Route path="leaves" element={<LeavesPage />} />

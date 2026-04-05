@@ -8,12 +8,16 @@ import {
   LayoutDashboard, Users, CalendarCheck, FileText,
   DollarSign, BarChart3, LogOut, ChevronRight,
   Receipt, Calculator, UserCircle, Bell, Layers,
+  BriefcaseBusiness, Building2, ShieldCheck,
 } from 'lucide-react'
 import type { Notification } from '@/types'
 
 const navItems = [
   { path: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'manager', 'employee'] },
+  { path: 'company', label: 'Company', icon: Building2, roles: ['admin'] },
+  { path: 'hr-policy', label: 'HR Policy', icon: ShieldCheck, roles: ['admin'] },
   { path: 'employees', label: 'Employees', icon: Users, roles: ['admin', 'manager'] },
+  { path: 'positions', label: 'Positions', icon: BriefcaseBusiness, roles: ['admin', 'manager'] },
   { path: 'attendance', label: 'Attendance', icon: CalendarCheck, roles: ['admin', 'manager', 'employee'] },
   { path: 'leaves', label: 'Leaves', icon: FileText, roles: ['admin', 'manager', 'employee'] },
   { path: 'payroll', label: 'Payroll', icon: DollarSign, roles: ['admin', 'manager', 'employee'] },
@@ -146,7 +150,7 @@ export default function AppLayout() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+        <nav className="scrollbar-sidebar flex-1 px-3 py-3 space-y-0.5 overflow-y-auto pr-2">
           {visibleItems.map(({ path, label, icon: Icon }) => (
             <NavLink
               key={path}

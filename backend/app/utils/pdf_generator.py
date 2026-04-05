@@ -8,6 +8,7 @@ from reportlab.platypus import (
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 import io
 from calendar import month_name
+from datetime import date
 from decimal import Decimal
 
 
@@ -151,6 +152,142 @@ def generate_payslip(payroll_data: dict, employee_data: dict, company_name: str 
     elements.append(Spacer(1, 6*mm))
     elements.append(Paragraph("This is a computer-generated payslip and does not require a signature.",
                                ParagraphStyle("footer", fontSize=7, textColor=colors.grey, alignment=TA_CENTER)))
+
+    doc.build(elements)
+    return buffer.getvalue()
+
+
+def generate_offer_letter(offer_data: dict, company_name: str = "Your Company Pvt. Ltd.") -> bytes:
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+    )
+
+    BLUE = colors.HexColor("#153b68")
+    LIGHT = colors.HexColor("#eef4fb")
+    GREY = colors.HexColor("#5b6573")
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("offer_title", parent=styles["Heading1"], fontName="Helvetica-Bold", fontSize=18, textColor=BLUE, leading=22)
+    section_style = ParagraphStyle("offer_section", parent=styles["Heading3"], fontName="Helvetica-Bold", fontSize=10, textColor=BLUE, uppercase=True, spaceAfter=6)
+    body_style = ParagraphStyle("offer_body", parent=styles["BodyText"], fontName="Helvetica", fontSize=10, leading=15, textColor=colors.black)
+    label_style = ParagraphStyle("offer_label", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=9, textColor=GREY)
+    footer_style = ParagraphStyle("offer_footer", parent=styles["BodyText"], fontName="Helvetica", fontSize=8, leading=12, textColor=GREY, alignment=TA_CENTER)
+
+    def fmt_date(value):
+        if isinstance(value, date):
+            return value.strftime("%d %B %Y")
+        return str(value or "-")
+
+    def fmt_money(value):
+        try:
+            amount = float(value or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        return f"Rs. {amount:,.2f} per annum"
+
+    candidate_name = offer_data.get("candidate_name", "Candidate")
+    designation = offer_data.get("designation", "Team Member")
+    department = offer_data.get("department_name", "General")
+    joining_date = fmt_date(offer_data.get("joining_date"))
+    annual_ctc = fmt_money(offer_data.get("annual_ctc"))
+    salary_structure_name = offer_data.get("salary_structure_name") or "Not specified"
+    salary_breakup = offer_data.get("salary_breakup")
+    work_location = offer_data.get("work_location") or "Company location"
+    reporting_manager = offer_data.get("reporting_manager") or "Reporting manager will be assigned on joining"
+    probation_months = offer_data.get("probation_months") or 6
+    additional_terms = offer_data.get("additional_terms") or "This offer is subject to completion of joining documents, background checks, and company policy acceptance."
+
+    elements = []
+    header = Table([[Paragraph(company_name, ParagraphStyle("company", fontName="Helvetica-Bold", fontSize=16, textColor=colors.white, alignment=TA_CENTER))]], colWidths=[174 * mm])
+    header.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), BLUE),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+    ]))
+    elements.append(header)
+    elements.append(Spacer(1, 8 * mm))
+    elements.append(Paragraph("Offer of Employment", title_style))
+    elements.append(Spacer(1, 2 * mm))
+    elements.append(Paragraph(f"Date: {fmt_date(offer_data.get('issue_date'))}", body_style))
+    elements.append(Spacer(1, 6 * mm))
+    elements.append(Paragraph(f"Dear {candidate_name},", body_style))
+    elements.append(Spacer(1, 3 * mm))
+    elements.append(Paragraph(
+        f"We are pleased to offer you the position of <b>{designation}</b> in the <b>{department}</b> team at <b>{company_name}</b>. "
+        f"Your proposed date of joining is <b>{joining_date}</b> and your annual Cost to Company will be <b>{annual_ctc}</b>.",
+        body_style,
+    ))
+    elements.append(Spacer(1, 6 * mm))
+
+    elements.append(Paragraph("Offer Summary", section_style))
+    summary = Table([
+        [Paragraph("Designation", label_style), Paragraph(designation, body_style)],
+        [Paragraph("Department", label_style), Paragraph(department, body_style)],
+        [Paragraph("Joining Date", label_style), Paragraph(joining_date, body_style)],
+        [Paragraph("Annual CTC", label_style), Paragraph(annual_ctc, body_style)],
+        [Paragraph("Salary Structure", label_style), Paragraph(salary_structure_name, body_style)],
+        [Paragraph("Work Location", label_style), Paragraph(work_location, body_style)],
+        [Paragraph("Reporting To", label_style), Paragraph(reporting_manager, body_style)],
+        [Paragraph("Probation Period", label_style), Paragraph(f"{probation_months} months", body_style)],
+    ], colWidths=[45 * mm, 129 * mm])
+    summary.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), LIGHT),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d8e2ef")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(summary)
+    elements.append(Spacer(1, 6 * mm))
+
+    elements.append(Paragraph("Terms", section_style))
+    elements.append(Paragraph(additional_terms, body_style))
+    elements.append(Spacer(1, 4 * mm))
+    if salary_breakup:
+        elements.append(Paragraph("Compensation Snapshot", section_style))
+        rows = [["Monthly Component", "Amount"]]
+        for name, amount in salary_breakup.get("earnings", {}).items():
+            rows.append([name, f"Rs. {float(amount):,.2f}"])
+        for name, amount in salary_breakup.get("employer_contributions", {}).items():
+            rows.append([f"{name} (Employer Contribution)", f"Rs. {float(amount):,.2f}"])
+        rows.append(["Gross Salary", f"Rs. {float(salary_breakup.get('gross_salary', 0)):,.2f}"])
+        rows.append(["Monthly CTC", f"Rs. {float(salary_breakup.get('monthly_ctc', 0)):,.2f}"])
+        comp_table = Table(rows, colWidths=[110 * mm, 64 * mm])
+        comp_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), BLUE),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d8e2ef")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+            ("ALIGN", (1, 1), (1, -1), "RIGHT"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(comp_table)
+        elements.append(Spacer(1, 4 * mm))
+
+    elements.append(Paragraph(
+        "Please confirm your acceptance of this offer by signing and returning a copy of this letter or by acknowledging it through the company onboarding process.",
+        body_style,
+    ))
+    elements.append(Spacer(1, 8 * mm))
+    elements.append(HRFlowable(width="100%", thickness=0.6, color=colors.HexColor("#d8e2ef")))
+    elements.append(Spacer(1, 4 * mm))
+    elements.append(Paragraph(f"For {company_name}", body_style))
+    elements.append(Spacer(1, 8 * mm))
+    elements.append(Paragraph(offer_data.get("prepared_by") or "Authorized Signatory", body_style))
+    elements.append(Spacer(1, 10 * mm))
+    elements.append(Paragraph("This is a system-generated offer letter.", footer_style))
 
     doc.build(elements)
     return buffer.getvalue()

@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base, SessionLocal
-from app.routers import auth, employees, attendance, leaves, payroll, reports, reimbursements, notifications, salary_structures
+from app.routers import auth, employees, attendance, leaves, payroll, reports, reimbursements, notifications, salary_structures, positions, hiring, company, hr_policy
 from app.migrations import run_migrations
 
 
@@ -34,7 +34,11 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(company.router)
+app.include_router(hr_policy.router)
 app.include_router(employees.router)
+app.include_router(positions.router)
+app.include_router(hiring.router)
 app.include_router(attendance.router)
 app.include_router(leaves.router)
 app.include_router(payroll.router)

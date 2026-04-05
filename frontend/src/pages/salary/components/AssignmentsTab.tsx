@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { salaryStructureApi, employeeApi } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
@@ -12,9 +11,8 @@ import type { SalaryPreview, Employee } from '@/types'
 
 export default function AssignmentsTab() {
   const qc = useQueryClient()
-  const [assignState, setAssignState] = useState<{ empId: number; empName: string; currentStructureId?: number; currentCtc?: number } | null>(null)
+  const [assignState, setAssignState] = useState<{ empId: number; empName: string; currentStructureId?: number; annualCtc?: number } | null>(null)
   const [selStructure, setSelStructure] = useState('')
-  const [ctcInput, setCtcInput] = useState('')
   const [preview, setPreview] = useState<SalaryPreview | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
 
@@ -29,12 +27,11 @@ export default function AssignmentsTab() {
   })
 
   const assignMutation = useMutation({
-    mutationFn: () => salaryStructureApi.assign(assignState!.empId, Number(selStructure), Number(ctcInput)),
+    mutationFn: () => salaryStructureApi.assign(assignState!.empId, Number(selStructure)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['employees'] })
       setAssignState(null)
       setSelStructure('')
-      setCtcInput('')
       setPreview(null)
     },
   })
@@ -45,10 +42,10 @@ export default function AssignmentsTab() {
   })
 
   async function handlePreview() {
-    if (!selStructure || !ctcInput) return
+    if (!selStructure || !assignState?.annualCtc) return
     setPreviewLoading(true)
     try {
-      const result = await salaryStructureApi.preview(Number(selStructure), Number(ctcInput))
+      const result = await salaryStructureApi.preview(Number(selStructure), assignState.annualCtc)
       setPreview(result)
     } finally {
       setPreviewLoading(false)
@@ -56,9 +53,13 @@ export default function AssignmentsTab() {
   }
 
   function openAssign(emp: Employee) {
-    setAssignState({ empId: emp.id, empName: `${emp.first_name} ${emp.last_name}`, currentStructureId: emp.structure_id, currentCtc: emp.annual_ctc })
+    setAssignState({
+      empId: emp.id,
+      empName: `${emp.first_name} ${emp.last_name}`,
+      currentStructureId: emp.structure_id,
+      annualCtc: emp.annual_ctc ? Number(emp.annual_ctc) : undefined,
+    })
     setSelStructure(emp.structure_id ? String(emp.structure_id) : '')
-    setCtcInput(emp.annual_ctc ? String(emp.annual_ctc) : '')
     setPreview(null)
   }
 
@@ -79,6 +80,17 @@ export default function AssignmentsTab() {
               </button>
             </div>
             <div className="p-5 space-y-4">
+              {assignState.annualCtc ? (
+                <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Annual CTC</span>
+                  <span className="text-sm font-semibold text-gray-800">{formatCurrency(assignState.annualCtc)}</span>
+                </div>
+              ) : (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                  No Annual CTC set for this employee. Set it in the Employee page before assigning a structure.
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <Label>Salary Structure</Label>
                 <Select value={selStructure} onChange={(e) => { setSelStructure(e.target.value); setPreview(null) }}>
@@ -88,18 +100,8 @@ export default function AssignmentsTab() {
                   ))}
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label>Annual CTC (₹)</Label>
-                <Input
-                  type="number"
-                  placeholder="e.g. 600000"
-                  value={ctcInput}
-                  onChange={(e) => { setCtcInput(e.target.value); setPreview(null) }}
-                />
-                {ctcInput && <p className="text-xs text-gray-400">Monthly: {formatCurrency(Number(ctcInput) / 12)}</p>}
-              </div>
 
-              {selStructure && ctcInput && (
+              {selStructure && assignState.annualCtc && (
                 <Button size="sm" variant="outline" onClick={handlePreview} loading={previewLoading}>
                   <Eye className="w-3.5 h-3.5 mr-1" /> Preview Breakdown
                 </Button>
@@ -107,18 +109,27 @@ export default function AssignmentsTab() {
 
               {preview && (
                 <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
-                  <p className="text-xs font-semibold text-gray-600 mb-2">Monthly Breakdown</p>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                    {Object.entries(preview.earnings).map(([k, v]) => (
-                      <div key={k} className="flex justify-between text-xs">
-                        <span className="text-gray-600">{k}</span>
-                        <span className="font-medium text-green-700">{formatCurrency(v)}</span>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">
+                    Monthly Breakdown
+                    <span className="ml-2 text-[10px] font-normal text-blue-600">
+                      India standard CTC structure
+                    </span>
+                  </p>
+                  <div className="space-y-1">
+                    {Object.entries(preview.earnings).map(([name, val]) => (
+                      <div key={name} className="flex justify-between text-xs">
+                        <span className="text-gray-600">{name}</span>
+                        <span className="font-medium text-green-700">{formatCurrency(val)}</span>
                       </div>
                     ))}
                   </div>
                   <div className="mt-2 pt-2 border-t border-gray-200 flex justify-between text-sm font-semibold">
-                    <span>Gross Monthly</span>
-                    <span className="text-green-700">{formatCurrency(preview.gross_monthly)}</span>
+                    <span>Gross Salary</span>
+                    <span className="text-green-700">{formatCurrency(preview.fixed_pay)}</span>
+                  </div>
+                  <div className="mt-1 flex justify-between text-sm font-semibold">
+                    <span>Monthly CTC</span>
+                    <span className="text-emerald-700">{formatCurrency(preview.monthly_ctc)}</span>
                   </div>
                   <p className="text-xs text-gray-400 mt-1">Net pay will be calculated after statutory deductions during payroll generation.</p>
                 </div>
@@ -128,7 +139,7 @@ export default function AssignmentsTab() {
               <Button
                 onClick={() => assignMutation.mutate()}
                 loading={assignMutation.isPending}
-                disabled={!selStructure || !ctcInput}
+                disabled={!selStructure || !assignState.annualCtc}
               >
                 Assign Structure
               </Button>
@@ -150,7 +161,6 @@ export default function AssignmentsTab() {
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Designation</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Structure</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Annual CTC</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Monthly Gross</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -165,21 +175,11 @@ export default function AssignmentsTab() {
                     <td className="px-4 py-3">
                       {emp.structure_id
                         ? <span className="text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded">{structureMap[emp.structure_id] ?? `Structure #${emp.structure_id}`}</span>
-                        : <span className="text-xs text-gray-400 italic">Legacy (flat salary)</span>
+                        : <span className="text-xs text-gray-400 italic">Not assigned</span>
                       }
                     </td>
                     <td className="px-4 py-3 text-right font-medium">
-                      {emp.annual_ctc ? formatCurrency(Number(emp.annual_ctc)) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-500 text-xs">
-                      {emp.basic_salary
-                        ? formatCurrency(
-                            (Number(emp.basic_salary) || 0) + (Number(emp.hra) || 0) +
-                            (Number(emp.special_allowance) || 0) + (Number(emp.conveyance_allowance) || 0) +
-                            (Number(emp.medical_allowance) || 0)
-                          )
-                        : '—'
-                      }
+                      {emp.annual_ctc ? formatCurrency(Number(emp.annual_ctc)) : <span className="text-xs text-amber-600 italic">Not set</span>}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">

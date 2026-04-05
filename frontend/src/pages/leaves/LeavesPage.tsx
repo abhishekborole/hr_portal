@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { leaveApi, employeeApi } from '@/lib/api'
+import { leaveApi, employeeApi, attendanceApi } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { PageHeader } from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,7 +17,7 @@ import { LeaveStatusBadge } from '@/pages/dashboard/DashboardPage'
 import { formatDate } from '@/lib/utils'
 import { Check, X } from 'lucide-react'
 
-type TabKey = 'all' | 'pending' | 'apply' | 'balances'
+type TabKey = 'all' | 'pending' | 'apply' | 'balances' | 'holidays'
 
 const applySchema = z.object({
   leave_type: z.enum(['CL', 'SL', 'EL', 'LOP']),
@@ -48,6 +48,10 @@ export default function LeavesPage() {
   const { data: leaves = [], isLoading } = useQuery({
     queryKey: ['leaves', { status: filterStatus || undefined, employee_id: filterEmpId ? Number(filterEmpId) : undefined, year: filterYear }],
     queryFn: () => leaveApi.list({ status: filterStatus || undefined, employee_id: filterEmpId ? Number(filterEmpId) : undefined, year: filterYear }),
+  })
+  const { data: holidays = [] } = useQuery({
+    queryKey: ['holidays', filterYear],
+    queryFn: () => attendanceApi.holidays(filterYear),
   })
 
   const pendingLeaves = leaves.filter((l) => l.status === 'pending')
@@ -100,10 +104,12 @@ export default function LeavesPage() {
         { key: 'pending' as TabKey, label: `Pending (${pendingLeaves.length})` },
         { key: 'apply' as TabKey, label: 'Apply (Admin)' },
         { key: 'balances' as TabKey, label: 'Balances' },
+        { key: 'holidays' as TabKey, label: 'Holidays' },
       ]
     : [
         { key: 'all' as TabKey, label: 'My Leaves' },
         { key: 'apply' as TabKey, label: 'Apply Leave' },
+        { key: 'holidays' as TabKey, label: 'Holidays' },
       ]
 
   return (
@@ -348,6 +354,40 @@ export default function LeavesPage() {
                 </tbody>
               </table>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'holidays' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Holiday Calendar {filterYear}</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {holidays.length === 0 ? (
+              <div className="py-10 text-center text-sm text-gray-400">No holidays configured for {filterYear}</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Holiday</th>
+                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Date</th>
+                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Type</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {holidays.map((holiday) => (
+                      <tr key={holiday.id} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="py-2.5 px-4 font-medium text-gray-800">{holiday.name}</td>
+                        <td className="py-2.5 px-4 text-gray-600">{formatDate(holiday.date)}</td>
+                        <td className="py-2.5 px-4"><Badge variant="secondary" className="capitalize">{holiday.holiday_type}</Badge></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from app.database import get_db
 from app.models import Attendance, Employee, User, Holiday
-from app.schemas import AttendanceCreate, AttendanceBulkCreate, AttendanceOut
+from app.schemas import AttendanceCreate, AttendanceBulkCreate, AttendanceOut, HolidayCreate, HolidayOut
 from app.routers.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
@@ -187,7 +187,7 @@ def attendance_summary(
     }
 
 
-@router.get("/holidays/", response_model=List[dict])
+@router.get("/holidays/", response_model=List[HolidayOut])
 def list_holidays(
     year: int = Query(default=2025),
     db: Session = Depends(get_db),
@@ -198,4 +198,46 @@ def list_holidays(
         Holiday.date >= date(year, 1, 1),
         Holiday.date <= date(year, 12, 31),
     ).order_by(Holiday.date).all()
-    return [{"id": h.id, "name": h.name, "date": str(h.date), "type": h.holiday_type} for h in holidays]
+    return holidays
+
+
+@router.post("/holidays/", response_model=HolidayOut)
+def create_holiday(
+    data: HolidayCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    existing = db.query(Holiday).filter(
+        Holiday.tenant_id == current_user.tenant_id,
+        Holiday.date == data.date,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Holiday already exists for this date")
+
+    holiday = Holiday(
+        tenant_id=current_user.tenant_id,
+        name=data.name,
+        date=data.date,
+        holiday_type=data.holiday_type,
+    )
+    db.add(holiday)
+    db.commit()
+    db.refresh(holiday)
+    return holiday
+
+
+@router.delete("/holidays/{holiday_id}")
+def delete_holiday(
+    holiday_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    holiday = db.query(Holiday).filter(
+        Holiday.id == holiday_id,
+        Holiday.tenant_id == current_user.tenant_id,
+    ).first()
+    if not holiday:
+        raise HTTPException(status_code=404, detail="Holiday not found")
+    db.delete(holiday)
+    db.commit()
+    return {"message": "Holiday deleted"}

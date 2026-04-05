@@ -44,9 +44,11 @@ def create_structure(
     if existing:
         raise HTTPException(status_code=400, detail="Structure name already exists")
 
+    payload = data.model_dump()
+    payload["salary_mode"] = "ctc_driven"
     structure = SalaryStructure(
         tenant_id=current_user.tenant_id,
-        **data.model_dump(),
+        **payload,
     )
     db.add(structure)
     db.commit()
@@ -83,7 +85,10 @@ def update_structure(
     if not structure:
         raise HTTPException(status_code=404, detail="Structure not found")
 
-    for k, v in data.model_dump(exclude_none=True).items():
+    updates = data.model_dump(exclude_none=True)
+    if "salary_mode" in updates:
+        updates["salary_mode"] = "ctc_driven"
+    for k, v in updates.items():
         setattr(structure, k, v)
     db.commit()
     db.refresh(structure)
@@ -135,10 +140,10 @@ def add_component(
     if not structure:
         raise HTTPException(status_code=404, detail="Structure not found")
 
-    if data.component_type not in ("earning", "deduction"):
-        raise HTTPException(status_code=400, detail="component_type must be earning or deduction")
-    if data.calc_type not in ("fixed", "percentage_of_basic", "percentage_of_ctc"):
-        raise HTTPException(status_code=400, detail="calc_type must be fixed, percentage_of_basic, or percentage_of_ctc")
+    if data.component_type not in ("earning", "benefit", "deduction"):
+        raise HTTPException(status_code=400, detail="component_type must be earning, benefit, or deduction")
+    if data.calc_type not in ("fixed", "percentage_of_basic", "percentage_of_ctc", "percentage_of_annual_ctc", "remainder", "ctc_deduction"):
+        raise HTTPException(status_code=400, detail="calc_type must be fixed, percentage_of_basic, percentage_of_ctc, percentage_of_annual_ctc, remainder, or ctc_deduction")
 
     component = SalaryComponent(
         structure_id=structure_id,
@@ -209,18 +214,26 @@ def preview_structure(
     if not structure:
         raise HTTPException(status_code=404, detail="Structure not found")
 
-    result = compute_components_from_structure(structure.components, data.annual_ctc)
-    gross = sum(v for v in result["earnings"].values())
-    total_deductions = sum(v for v in result["deductions"].values())
+    if not structure.components:
+        raise HTTPException(status_code=400, detail="No components defined. Add components to this structure first.")
+
+    salary_mode = "ctc_driven"
+    result      = compute_components_from_structure(structure.components, data.annual_ctc, salary_mode)
+    fixed_pay   = sum(result["earnings"].values())
+    employer_contributions = result.get("benefits", {})
+    employee_deductions = result.get("deductions", {})
+    gross_ctc   = fixed_pay + sum(employer_contributions.values())
 
     return {
-        "annual_ctc": float(data.annual_ctc),
+        "annual_ctc":  float(data.annual_ctc),
         "monthly_ctc": float(data.annual_ctc / 12),
-        "earnings": {k: float(v) for k, v in result["earnings"].items()},
-        "deductions": {k: float(v) for k, v in result["deductions"].items()},
-        "gross_monthly": float(gross),
-        "total_deductions": float(total_deductions),
-        "estimated_net": float(gross - total_deductions),
+        "gross_ctc":   float(gross_ctc * 12),
+        "monthly_gross_ctc": float(gross_ctc),
+        "salary_mode": "ctc_driven",
+        "earnings":    {k: float(v) for k, v in result["earnings"].items()},
+        "employer_contributions":  {k: float(v) for k, v in employer_contributions.items()},
+        "employee_deductions":  {k: float(v) for k, v in employee_deductions.items()},
+        "fixed_pay":   float(fixed_pay),
     }
 
 
@@ -247,27 +260,30 @@ def assign_structure(
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-    emp.structure_id = data.structure_id
-    emp.annual_ctc = data.annual_ctc
+    if not emp.annual_ctc:
+        raise HTTPException(status_code=400, detail="Employee does not have an Annual CTC set. Set it in the employee profile first.")
 
-    # Sync legacy salary fields from structure so they show correctly in profile
-    result = compute_components_from_structure(structure.components, data.annual_ctc)
-    name_map = {
-        "basic": "basic_salary",
-        "hra": "hra",
-        "special allowance": "special_allowance",
-        "conveyance": "conveyance_allowance",
-        "conveyance allowance": "conveyance_allowance",
-        "medical": "medical_allowance",
-        "medical allowance": "medical_allowance",
-    }
-    for comp_name, amount in result["earnings"].items():
-        col = name_map.get(comp_name.lower())
-        if col:
-            setattr(emp, col, amount)
+    if not structure.components:
+        raise HTTPException(status_code=400, detail="Structure has no components defined. Add components first.")
+
+    result    = compute_components_from_structure(structure.components, emp.annual_ctc, "ctc_driven")
+    earnings  = result["earnings"]
+    benefits   = result.get("benefits", {})
+    basic     = result["basic"]
+    hra       = next((v for k, v in earnings.items() if "hra" in k.lower()), Decimal("0"))
+    special   = next((v for k, v in earnings.items() if "special" in k.lower()), Decimal("0"))
+    emp_pf    = next((v for k, v in benefits.items() if "employer" in k.lower() and "pf" in k.lower()), Decimal("0"))
+    fixed_pay = sum(earnings.values())
+
+    emp.structure_id        = data.structure_id
+    emp.basic_salary        = basic
+    emp.hra                 = hra
+    emp.special_allowance   = special
+    emp.employer_pf_monthly = emp_pf
+    emp.fixed_pay_monthly   = fixed_pay
 
     db.commit()
-    return {"message": f"Structure '{structure.name}' assigned to {emp.first_name} {emp.last_name} with CTC ₹{data.annual_ctc:,.2f}"}
+    return {"message": f"Structure '{structure.name}' assigned to {emp.first_name} {emp.last_name}"}
 
 
 @router.delete("/assign/{employee_id}")

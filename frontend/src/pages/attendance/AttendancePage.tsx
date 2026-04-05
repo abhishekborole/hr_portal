@@ -181,7 +181,7 @@ export default function AttendancePage() {
                   <tr key={h.id} className="border-b border-gray-50">
                     <td className="py-2.5 px-4 font-medium">{h.name}</td>
                     <td className="py-2.5 px-4 text-gray-600">{formatDate(h.date)}</td>
-                    <td className="py-2.5 px-4"><Badge variant="secondary" className="capitalize">{h.type}</Badge></td>
+                    <td className="py-2.5 px-4"><Badge variant="secondary" className="capitalize">{h.holiday_type}</Badge></td>
                   </tr>
                 ))}
               </tbody>
